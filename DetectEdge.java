@@ -10,6 +10,7 @@ public class DetectEdge extends Frame implements ActionListener {
 	BufferedImage input;
 	int width, height;
 	int lowT=20, highT=100;
+	boolean useColorThreshold = false;
 	CanvasImage source, target;
 	CheckboxGroup metrics = new CheckboxGroup();
 	// Constructor
@@ -28,7 +29,7 @@ public class DetectEdge extends Frame implements ActionListener {
 		Panel main = new Panel();
 		source = new CanvasImage(input);
 		target = new CanvasImage(width, height);
-		main.setLayout(new GridLayout(1, 2, 10, 10));
+		main.setLayout(new GridLayout(1, 2, 10, 11));
 		main.add(source);
 		main.add(target);
 		// prepare the panel for buttons.
@@ -61,7 +62,7 @@ public class DetectEdge extends Frame implements ActionListener {
 		slider1.addChangeListener(changeEvent -> {
 			lowT = slider1.getValue();
 			label1.setText("lowT=" + lowT);
-			target.resetImage(non_max_suppression(grad_mag(derivatives_x(blurredImages), derivatives_y(blurredImages)), grad_dir(derivatives_x(blurredImages), derivatives_y(blurredImages))));
+			target.resetImage(thresholdingFunction(non_max_suppression(grad_mag(derivatives_x(blurredImages), derivatives_y(blurredImages)), grad_dir(derivatives_x(blurredImages), derivatives_y(blurredImages))), highT, lowT, useColorThreshold));
 
 		});
 		JLabel label2 = new JLabel("highT=" + highT);
@@ -73,9 +74,14 @@ public class DetectEdge extends Frame implements ActionListener {
 		slider2.addChangeListener(changeEvent -> {
 			highT = slider2.getValue();
 			label2.setText("highT=" + highT);
+			target.resetImage(thresholdingFunction(non_max_suppression(grad_mag(derivatives_x(blurredImages), derivatives_y(blurredImages)), grad_dir(derivatives_x(blurredImages), derivatives_y(blurredImages))), highT, lowT, useColorThreshold));
+
 		});
 
 		button = new Button("Thresholding");
+		button.addActionListener(this);
+		controls.add(button);
+		button = new Button("Thresh Color");
 		button.addActionListener(this);
 		controls.add(button);
 		button = new Button("Hysteresis Tracking");
@@ -97,22 +103,29 @@ public class DetectEdge extends Frame implements ActionListener {
 	public void actionPerformed(ActionEvent e) {
 		BufferedImage blurredImage = approximationFilter(source.image);
 		blurredImage = grayscale(blurredImage);
-
-		if ( ((Button)e.getSource()).getLabel().equals("DoG_x") )
+		if ( ((Button)e.getSource()).getLabel().equals("DoG_x") ) {
 			//Paint the result of the intensity in the x direction
 			target.resetImage(derivatives_x(blurredImage));
-		if ( ((Button)e.getSource()).getLabel().equals("DoG_y") )
+		} else if ( ((Button)e.getSource()).getLabel().equals("DoG_y") ) {
 			//Paint the result of the intensity in the y direction
 			target.resetImage(derivatives_y(blurredImage));
-		if ( ((Button)e.getSource()).getLabel().equals("Grad Mag") )
+		} else if ( ((Button)e.getSource()).getLabel().equals("Grad Mag") ) {
 			//Calculate the gradient magnitude by taking the intensity in the x and y direction and square rooting the squared sum of the intensities
 			target.resetImage(grad_mag(derivatives_x(blurredImage), derivatives_y(blurredImage)));
-		if ( ((Button)e.getSource()).getLabel().equals("Grad Dir") )
+		} else if ( ((Button)e.getSource()).getLabel().equals("Grad Dir") ) {
 			target.resetImage(colorWheel(grad_dir(derivatives_x(blurredImage), derivatives_y(blurredImage))));
-			// target.resetImage(grad_dir(derivatives_x(blurredImage), derivatives_y(blurredImage)));
-			// source.resetImage(colorWheel(grad_dir(derivatives_x(blurredImage), derivatives_y(blurredImage))));
-		if ( ((Button)e.getSource()).getLabel().equals("Non-max Suppression") )
+		} else if ( ((Button)e.getSource()).getLabel().equals("Non-max Suppression") ) {
 			target.resetImage(non_max_suppression(grad_mag(derivatives_x(blurredImage), derivatives_y(blurredImage)), grad_dir(derivatives_x(blurredImage), derivatives_y(blurredImage))));
+		} else if ( ((Button)e.getSource()).getLabel().equals("Thresholding") ) {
+			useColorThreshold = false;
+			target.resetImage(thresholdingFunction(non_max_suppression(grad_mag(derivatives_x(blurredImage), derivatives_y(blurredImage)), grad_dir(derivatives_x(blurredImage), derivatives_y(blurredImage))), highT, lowT, useColorThreshold));
+		} else if ( ((Button)e.getSource()).getLabel().equals("Thresh Color") ) {
+			useColorThreshold = true;
+			target.resetImage(thresholdingFunction(non_max_suppression(grad_mag(derivatives_x(blurredImage), derivatives_y(blurredImage)), grad_dir(derivatives_x(blurredImage), derivatives_y(blurredImage))), highT, lowT, useColorThreshold));
+		} else if ( ((Button)e.getSource()).getLabel().equals("Hysteresis Tracking") ) {
+			useColorThreshold = true;
+			target.resetImage(hysteresis_tracking(thresholdingFunction(non_max_suppression(grad_mag(derivatives_x(blurredImage), derivatives_y(blurredImage)), grad_dir(derivatives_x(blurredImage), derivatives_y(blurredImage))), highT, lowT, false)));
+		}
 	}
 
 	/*Function to get the intensity of the image in the x direction
@@ -190,7 +203,6 @@ public class DetectEdge extends Frame implements ActionListener {
 				int rr = (int) Math.min(Math.max(0, magnitude_r), 255);
 				int gg = (int) Math.min(Math.max(0, magnitude_g), 255);
 				int bb = (int) Math.min(Math.max(0, magnitude_b), 255);
-				// System.out.println("R: " + rr + " G: " + gg + " B: " + bb);
 				t.setRGB(p, q, new Color(rr, gg, bb).getRGB());
 
 			}
@@ -232,7 +244,7 @@ public class DetectEdge extends Frame implements ActionListener {
 				double angle_r = Math.atan2(gody_r, godx_r);
 				double angle_g = Math.atan2(gody_g, godx_g);
 				double angle_b = Math.atan2(gody_b, godx_b);
-				// System.out.println("RR: " + angle_r + " GG: " + angle_g + " BB: " + angle_b);
+
 				float r_ = (float) Math.min(Math.max(0, angle_r), 1);
 				float g_ = (float) Math.min(Math.max(0, angle_g), 1);
 				float b_ = (float) Math.min(Math.max(0, angle_b), 1);
@@ -248,11 +260,11 @@ public class DetectEdge extends Frame implements ActionListener {
 		Input (BufferedImage, BufferedImage): Gradient Magnitude, Gradient Direction
 		Output (BufferedImage): Non-Max Suppressed Image
 		Non-max Suppression Algorithm: 
-			- Iterate through each pixel in the gradient direction image and gradient magnitude image,
+			- Iterate through each pixel in the gradient direction image and gradient magnitude image
 			- If the gradient direction falls between 0 and 22.5, and the magnitude of the intensity of the current pixel is larger than the one left or right to it, keep pixel, otherwise set to 0
 			- If the gradient direction falls between 22.5 and 67.5, and the magnitude of the intensity of the current pixel is larger than the one up right or down left to it, keep pixel, otherwise set to 0
-			- If the gradient direction falls between 67.5 and 112.5, and the magnitude of the intensity of the current pixel is larger than the one up right or down left to it, keep pixel, otherwise set to 0
-			 
+			- If the gradient direction falls between 67.5 and 112.5, and the magnitude of the intensity of the current pixel is larger than the one up or down to it, keep pixel, otherwise set to 0
+			- If the gradient direction falls between 112.5 and 157.5, and the magnitude of the intensity of the current pixel is larger than the one up left or down right to it, keep pixel, otherwise set to 0
 	*/
 	public BufferedImage non_max_suppression(BufferedImage grad_mag, BufferedImage grad_dir){
 		int left, middle, right, up, down, up_left, up_right, down_left, down_right, red = 0, green = 0, blue = 0;
@@ -348,29 +360,107 @@ public class DetectEdge extends Frame implements ActionListener {
 		return t;
 	}
 	
-	// public BufferedImage thresholding(BufferedImage img, int highT, int lowT){
-	// 	int l, r, dr, dg, db;
-	// 	Color img_color;
-	// 	BufferedImage t = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+	public BufferedImage thresholdingFunction(BufferedImage img, int highTr, int lowTr, boolean useColor){
+		int l, r, dr, dg, db;
+		Color img_color;
+		BufferedImage t = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+		int rr = 0, gg = 0, bb = 0;
+		float max = 0f;
+		
+		for ( int q=0 ; q<height ; q++ ) {
+			for ( int p=0 ; p<width ; p++ ) {
+				float val = img.getRaster().getSample(p, q, 0)/255f;
 
-	// 	for ( int q=0 ; q<height ; q++ ) {
-	// 		for ( int p=0 ; p<width ; p++ ) {
-	// 			l = p==0 ? p : p-1;
-	// 			r = p==width-1 ? p : p+1;
+				if (val > max){
+					max = val;
+				}
+			}
+		}
+		float highThresh =  (highTr/128f) * max;
+		float lowThresh = highThresh * (lowTr/128f);
+		for ( int q=0 ; q<height ; q++ ) {
+			for ( int p=0 ; p<width ; p++ ) {
 				
-	// 			float val = img.getRaster().getSample(p, q, 0);
-	// 			if (val > ){
+				float val = img.getRaster().getSample(p, q, 0)/255f;
+				
+				if (val >= highThresh){
+					if (useColor == false){
+						rr = 255;
+						gg = 255;
+						bb = 255;
+					}else{
+						rr = 255;
+						gg = 0;
+						bb = 0;
+					}
+				}else if (val < lowThresh){
+					rr = 0;
+					gg = 0;
+					bb = 0;
+				}else if (val < highThresh && val >= lowThresh){
+					if (useColor == false){
+						rr = 128;
+						gg = 128;
+						bb = 128;
+					}else{
+						rr = 0;
+						gg = 0;
+						bb = 255;
+					}
+				}
 
-	// 			}
+				t.setRGB(p, q, new Color(rr, gg, bb).getRGB());
 
-	// 			// System.out.println("R: " + rr + " G: " + gg + " B: " + bb);
-	// 			t.setRGB(p, q, new Color(rr, gg, bb).getRGB());
+			}
+		}
+		return t;
+	}
 
-	// 		}
-	// 	}
-	// 	return t;
-	// }
+	public BufferedImage hysteresis_tracking(BufferedImage img){
+		int left, middle, right, up, down, up_left, up_right, down_left, down_right, red = 0, green = 0, blue = 0;
+		Color img_color;
+		BufferedImage t = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+		int rr = 0, gg = 0, bb = 0;
+		
+		
+		for ( int q=0 ; q<height ; q++ ) {
+			for ( int p=0 ; p<width ; p++ ) {
+				left = p==0 ? p : p-1;
+				middle = p;
+				right = p==width-1 ? p : p+1;
+				up = q==0 ? q : q-1;
+				down = q==height-1 ? q : q+1;
+				float grad_mag_left = img.getRaster().getSample(left, q, 0);
+				float grad_mag_middle = img.getRaster().getSample(middle, q, 0);
+				float grad_mag_right = img.getRaster().getSample(right, q, 0);
+				float grad_mag_up = img.getRaster().getSample(p, up, 0);
+				float grad_mag_down = img.getRaster().getSample(p, down, 0);
+				float grad_mag_up_left = img.getRaster().getSample(left, up, 0);
+				float grad_mag_up_right = img.getRaster().getSample(right, up, 0);
+				float grad_mag_down_left = img.getRaster().getSample(left, down, 0);
+				float grad_mag_down_right = img.getRaster().getSample(right, down, 0);
 
+				System.out.println(grad_mag_left);
+				if (grad_mag_left > 128 || grad_mag_right > 128 || grad_mag_up > 128 || grad_mag_down > 128 || grad_mag_up_left > 128 || grad_mag_up_right > 128 || grad_mag_down_left > 128 || grad_mag_down_right > 128){
+					rr = 255;
+					gg = 255;
+					bb = 255;
+				}else{
+					rr = 0;
+					gg = 0;
+					bb = 0;
+				}
+				t.setRGB(p, q, new Color(rr, gg, bb).getRGB());
+
+			}
+		}
+		return t;
+	}
+	
+	/*Grayscale conversion Function
+		Input (BufferedImage): Image to convert to grayscale
+		Output (BufferedImage): Grayscale Image
+	*/
 	public BufferedImage grayscale(BufferedImage img){
 		BufferedImage grayscaleImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 		
@@ -390,65 +480,24 @@ public class DetectEdge extends Frame implements ActionListener {
 		return grayscaleImage;
 	}
 
+	/*Approximation Filter Function
+		Input (BufferedImage): Image to apply filter to
+		Output (BufferedImage): Approximated Image
+	*/
 	public BufferedImage approximationFilter(BufferedImage img){
-		// BufferedImage approximated_img = averageBlur(img);
-		// BufferedImage approximated_img = gaussianBlur(img);
 		int[] filter = {1, 2, 1, 2, 4, 2, 1, 2, 1};
 		int filterWidth = 3;
+		
 		BufferedImage approximated_img = blur(img, filter, filterWidth);
 
 		return approximated_img;
 	}
 
-	public BufferedImage averageBlur(BufferedImage image){
-		
-		//Average Kernel
-		Kernel kernel = new Kernel(3, 3, new float[] {
-			1f/10f, 1f/10f, 1f/10f, 
-			1f/10f, 1f/10f, 1f/10f, 
-			1f/10f, 1f/10f, 1f/10f
-		});
-		
-		BufferedImageOp op = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP, null);
-		//Run convolution filter with given image.
-		BufferedImage blurredImage = op.filter(image, null);
-
-		return blurredImage;
-	}
-
-	public BufferedImage gaussianBlur(BufferedImage img) {
-        int radius = 5;
-		boolean horizontal = true;
-		if (radius < 1) {
-            throw new IllegalArgumentException("Radius must be >= 1");
-        }
-        int size = radius * 2 + 1;
-        float[] data = new float[size];
-        float sigma = radius / 3.0f;
-        float twoSigmaSquare = 2.0f * sigma * sigma;
-        float sigmaRoot = (float) Math.sqrt(twoSigmaSquare * Math.PI);
-        float total = 0.0f;
-        for (int i = -radius; i <= radius; i++) {
-            float distance = i * i;
-            int index = i + radius;
-            data[index] = (float) Math.exp(-distance / twoSigmaSquare)
-                    / sigmaRoot;
-            total += data[index];
-        }
-        for (int i = 0; i < data.length; i++) {
-            data[i] /= total;
-        }
-        Kernel kernel;
-        if (horizontal) {
-            kernel = new Kernel(size, 1, data);
-        } else {
-            kernel = new Kernel(1, size, data);
-        }
-        BufferedImageOp op = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP, null);
-		BufferedImage blurredImage = op.filter(img, null);
-		return blurredImage;
-    }
-
+	/*Gaussian Blur Filter Function
+		Input (BufferedImage, int list, int): Image to apply gaussian filter, filter kernel, filter width
+		Output (BufferedImage): Gaussian blurred image
+		Reference: https://stackoverflow.com/a/39686530
+	*/
 	public static BufferedImage blur(BufferedImage image, int[] filter, int filterWidth) {
 		if (filter.length % filterWidth != 0) {
 			throw new IllegalArgumentException("filter contains a incomplete row");
@@ -497,19 +546,27 @@ public class DetectEdge extends Frame implements ActionListener {
 		result.setRGB(0, 0, width, height, output, 0, width);
 		return result;
 	}
+
+	/*Function to display gradient direction using color wheel
+		Input (BufferedImage): Gradient direction Image to convert to color wheel representation
+		Output (BufferedImage): Color Wheel Image
+		Algorithm to convert image to color wheel representation:
+			- Iterate through each pixel in the gradient direction
+			- Convert RGB to Gray value
+			- Normalize gray value to a value between 0 and 1
+			- Normalized value represents the Hue in the HSV color wheel
+			- Convert HSV value to RGB
+			- Paint picture
+	*/
 	public BufferedImage colorWheel(BufferedImage img){
 		int r=0,g=0,b=0;
 		BufferedImage colorWheelImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 		for ( int q=0 ; q<height ; q++ ) {
 			for ( int p=0 ; p<width ; p++ ) {
 				Color img_color = new Color(img.getRGB(p,q));
-				// float gray = (img_color.getRed() + img_color.getGreen() + img_color.getBlue())/3f;
-				float gray = (float) img.getRaster().getSample(p, q, 0);
-				// System.out.println("Gray: " + gray + " 360: " + gray/360f);
-				int hsv = Color.HSBtoRGB((gray/255f), 1f, 1f);
+				float gray = (img_color.getRed() + img_color.getGreen() + img_color.getBlue())/3f;
+				int hsv = Color.HSBtoRGB(gray/255f , 1f, 1f);
 				colorWheelImage.setRGB(p, q, hsv);
-
-
 			}
 		}
 		return colorWheelImage;
