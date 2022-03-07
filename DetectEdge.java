@@ -123,7 +123,6 @@ public class DetectEdge extends Frame implements ActionListener {
 			useColorThreshold = true;
 			target.resetImage(thresholdingFunction(non_max_suppression(grad_mag(derivatives_x(blurredImage), derivatives_y(blurredImage)), grad_dir(derivatives_x(blurredImage), derivatives_y(blurredImage))), highT, lowT, useColorThreshold));
 		} else if ( ((Button)e.getSource()).getLabel().equals("Hysteresis Tracking") ) {
-			useColorThreshold = true;
 			target.resetImage(hysteresis_tracking(thresholdingFunction(non_max_suppression(grad_mag(derivatives_x(blurredImage), derivatives_y(blurredImage)), grad_dir(derivatives_x(blurredImage), derivatives_y(blurredImage))), highT, lowT, false)));
 		}
 	}
@@ -360,6 +359,17 @@ public class DetectEdge extends Frame implements ActionListener {
 		return t;
 	}
 	
+	/*Double Thresholding Function
+		Input (BufferedImage, int, int, boolean): Non-max suppressed image, upper threshold value, lower threshold value, boolen to used colored representation or white and gray
+		Output (BufferedImage): Image with Double Thresholding applied
+		Algorithm:
+			- Threshold values are normalized by dividing the maximum threshold value
+			- Maximum intensity in the input image is found and multipled to the high threshold value
+			- Low Threshold value will be a percentage of the high threshold
+			- If the image pixel intensity is greater than the high threshold value, assign to strong edge color
+			- If the image pixel intensity is smaller than the low threshold value, set to 0
+			- If the image pixel intensity is between the low and high threshold, set to weak edge color
+	*/
 	public BufferedImage thresholdingFunction(BufferedImage img, int highTr, int lowTr, boolean useColor){
 		int l, r, dr, dg, db;
 		Color img_color;
@@ -416,21 +426,33 @@ public class DetectEdge extends Frame implements ActionListener {
 		return t;
 	}
 
+	/*Hysteresis Tracking Function
+		Input (BufferedImage): Double thresholding applied image
+		Output (BufferedImage): Image with joined edges
+		Algorithm:
+			- Strong edges have an intensity of 255, weak edges have an intensity of 128, non edges have an intensity of 0
+			- If current pixel is a strong edge, set to 255
+			- If current pixel is a weak edge:
+				- If any of it's 8 surrounding pixels is a strong edge, set to 255, otherwise 0
+			- This process will find weak edges that are connected to strong edges and convert them to strong edges
+			- Any weak edges that are not connected to strong edges will be removed
+	*/
 	public BufferedImage hysteresis_tracking(BufferedImage img){
 		int left, middle, right, up, down, up_left, up_right, down_left, down_right, red = 0, green = 0, blue = 0;
 		Color img_color;
-		BufferedImage t = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 		int rr = 0, gg = 0, bb = 0;
-		
-		
+				
 		for ( int q=0 ; q<height ; q++ ) {
 			for ( int p=0 ; p<width ; p++ ) {
+				img_color = new Color (img.getRGB(p, q));
+
 				left = p==0 ? p : p-1;
 				middle = p;
 				right = p==width-1 ? p : p+1;
 				up = q==0 ? q : q-1;
 				down = q==height-1 ? q : q+1;
-				float grad_mag_left = img.getRaster().getSample(left, q, 0);
+
+				float grad_mag_left = img.getRaster().getSample(left, q, 1);
 				float grad_mag_middle = img.getRaster().getSample(middle, q, 0);
 				float grad_mag_right = img.getRaster().getSample(right, q, 0);
 				float grad_mag_up = img.getRaster().getSample(p, up, 0);
@@ -439,9 +461,14 @@ public class DetectEdge extends Frame implements ActionListener {
 				float grad_mag_up_right = img.getRaster().getSample(right, up, 0);
 				float grad_mag_down_left = img.getRaster().getSample(left, down, 0);
 				float grad_mag_down_right = img.getRaster().getSample(right, down, 0);
-
-				System.out.println(grad_mag_left);
-				if (grad_mag_left > 128 || grad_mag_right > 128 || grad_mag_up > 128 || grad_mag_down > 128 || grad_mag_up_left > 128 || grad_mag_up_right > 128 || grad_mag_down_left > 128 || grad_mag_down_right > 128){
+				
+				if (grad_mag_middle > 128){
+					rr = 255;
+					gg = 255;
+					bb = 255;
+				}else if (grad_mag_middle == 128){
+				
+				if (grad_mag_left == 255 | grad_mag_right == 255 | grad_mag_up == 255 | grad_mag_down == 255 | grad_mag_up_left == 255 | grad_mag_up_right == 255 | grad_mag_down_left == 255 | grad_mag_down_right == 255){
 					rr = 255;
 					gg = 255;
 					bb = 255;
@@ -450,11 +477,60 @@ public class DetectEdge extends Frame implements ActionListener {
 					gg = 0;
 					bb = 0;
 				}
-				t.setRGB(p, q, new Color(rr, gg, bb).getRGB());
+				}else{
+					rr = 0;
+					gg = 0;
+					bb = 0;
+				}
+				img.setRGB(p, q, new Color(rr, gg, bb).getRGB());
 
 			}
 		}
-		return t;
+		// 	for (int p=0 ; p<width ; p++ ) {
+		// 		for (int q=0 ; q<height ; q++ ) {
+		// 			img_color = new Color (img.getRGB(p, q));
+	
+		// 			left = p==0 ? p : p-1;
+		// 			middle = p;
+		// 			right = p==width-1 ? p : p+1;
+		// 			up = q==0 ? q : q-1;
+		// 			down = q==height-1 ? q : q+1;
+	
+		// 			float grad_mag_left = img.getRaster().getSample(left, q, 1);
+		// 			float grad_mag_middle = img.getRaster().getSample(middle, q, 0);
+		// 			float grad_mag_right = img.getRaster().getSample(right, q, 0);
+		// 			float grad_mag_up = img.getRaster().getSample(p, up, 0);
+		// 			float grad_mag_down = img.getRaster().getSample(p, down, 0);
+		// 			float grad_mag_up_left = img.getRaster().getSample(left, up, 0);
+		// 			float grad_mag_up_right = img.getRaster().getSample(right, up, 0);
+		// 			float grad_mag_down_left = img.getRaster().getSample(left, down, 0);
+		// 			float grad_mag_down_right = img.getRaster().getSample(right, down, 0);
+					
+		// 			if (grad_mag_middle > 128){
+		// 				rr = 255;
+		// 				gg = 255;
+		// 				bb = 255;
+		// 			}else if (grad_mag_middle == 128){
+					
+		// 			if (grad_mag_left == 255 | grad_mag_right == 255 | grad_mag_up == 255 | grad_mag_down == 255 | grad_mag_up_left == 255 | grad_mag_up_right == 255 | grad_mag_down_left == 255 | grad_mag_down_right == 255){
+		// 				rr = 255;
+		// 				gg = 255;
+		// 				bb = 255;
+		// 			}else{
+		// 				rr = 0;
+		// 				gg = 0;
+		// 				bb = 0;
+		// 			}
+		// 			}else{
+		// 				rr = 0;
+		// 				gg = 0;
+		// 				bb = 0;
+		// 			}
+		// 			img.setRGB(p, q, new Color(rr, gg, bb).getRGB());
+	
+		// 		}
+		// }
+		return img;
 	}
 	
 	/*Grayscale conversion Function
